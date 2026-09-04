@@ -2,62 +2,64 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 
-static char *read_cmdline(int IntPID) {
+static char *read_cmdline(int pid) {
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "/proc/%d/cmdline", IntPID);
-    
+    snprintf(filepath, sizeof(filepath), "/proc/%d/cmdline", pid);
+
     FILE *fp = fopen(filepath, "rb");
     if (fp == NULL) {
         return NULL;
     }
-    
+
     char buffer[4096];
     size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, fp);
     fclose(fp);
-    
+
     if (bytes_read == 0) {
         return NULL;
     }
-    
+
     buffer[bytes_read] = '\0';
-    
+
     for (size_t i = 0; i < bytes_read; i++) {
         if (buffer[i] == '\0') {
             buffer[i] = ' ';
         }
     }
-    
-    if (buffer[bytes_read - 1] == ' ') {
+
+    if (bytes_read > 0 && buffer[bytes_read - 1] == ' ') {
         buffer[bytes_read - 1] = '\0';
     }
-    
+
     return strdup(buffer);
 }
 
-int count_fd(int IntPID) {
-    char command[256];
-    char line[256];
-    int fd_counter = 0;
-    
-    snprintf(command, sizeof(command), "ls -l /proc/%d/fd", IntPID);
-    
-    FILE *fp = popen(command, "r");
-    if (fp == NULL) {
+static int count_fd(int pid) {
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath), "/proc/%d/fd", pid);
+
+    DIR *dir = opendir(filepath);
+    if (dir == NULL) {
         return -1;
     }
-    
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        if (strstr(line, "lrwx") != NULL) {
-            fd_counter++;
+
+    int fd_count = 0;
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
         }
+        fd_count++;
     }
-    
-    pclose(fp);
-    return fd_counter;
+
+    closedir(dir);
+    return fd_count;
 }
 
-ProcessInfo proc_info_init(){
+ProcessInfo proc_info_init(void) {
     ProcessInfo result = {};
     result.PID = 0;
     result.ParentPID = -1;
@@ -68,41 +70,64 @@ ProcessInfo proc_info_init(){
     return result;
 }
 
-ProcessInfo proc_info_fill(int IntPID, ProcessInfo result) {
-    result.PID = IntPID;
-    char StateCommand[256];
-    char Stateline[256];
-    snprintf(StateCommand, sizeof(StateCommand), 
-             "cat /proc/%d/status | head -n 15", IntPID);
-    
-    FILE *fp = popen(StateCommand, "r");
-    if (fp == NULL) {
-        perror("popen failed");
-        return;
+int proc_info_fill(int pid, ProcessInfo *info) {
+    if (info == NULL) {
+        return -1;
     }
-    
-    while (fgets(Stateline, sizeof(Stateline), fp) != NULL) {
-        if (strncmp(Stateline, "Name:", 5) == 0) {
-            sscanf(Stateline, "Name: %63s", result.Name);
+
+    info->PID = pid;
+
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath), "/proc/%d/status", pid);
+
+    FILE *fp = fopen(filepath, "r");
+    if (fp == NULL) {
+        perror("cannot open /proc/PID/status");
+        return -1;
+    }
+
+    char line[256];
+    int name_found = 0, state_found = 0, ppid_found = 0;
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strncmp(line, "Name:", 5) == 0) {
+            sscanf(line, "Name: %63s", info->Name);
+            name_found = 1;
         }
-        else if (strncmp(Stateline, "State:", 6) == 0) {
-            sscanf(Stateline, "State: %63[^\n]", result.State);
+        else if (strncmp(line, "State:", 6) == 0) {
+            sscanf(line, "State: %63[^\n]", info->State);
+            state_found = 1;
         }
-        else if (strncmp(Stateline, "PPid:", 5) == 0) {
-            sscanf(Stateline, "PPid: %d", &result.ParentPID);
+        else if (strncmp(line, "PPid:", 5) == 0) {
+            sscanf(line, "PPid: %d", &info->ParentPID);
+            ppid_found = 1;
             break;
         }
     }
-    pclose(fp);
-    
-    result.CommandLine = read_cmdline(IntPID);
-    result.FDcount = count_fd(IntPID);
-    
-    return result;
+    fclose(fp);
+
+    if (!name_found || !state_found || !ppid_found) {
+        fprintf(stderr, "Не удалось прочитать обязательные поля из /proc/%d/status\n", pid);
+        return -1;
+    }
+
+    info->CommandLine = read_cmdline(pid);
+
+    info->FDcount = count_fd(pid);
+    if (info->FDcount < 0) {
+        perror("cannot open /proc/PID/fd");
+        return -1;
+    }
+
+    return 0;
 }
 
-void proc_info_destroy(ProcessInfo info) {
-    if (info.CommandLine != NULL) {
-        free(info.CommandLine);
+void proc_info_destroy(ProcessInfo *info) {
+    if (info == NULL) {
+        return;
+    }
+    if (info->CommandLine != NULL) {
+        free(info->CommandLine);
+        info->CommandLine = NULL;
     }
 }

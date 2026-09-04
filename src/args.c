@@ -8,12 +8,12 @@ CheckPID (char *CharPID)
     if (CharPID == NULL)
         return -1;
     char* EndChar = NULL;
-    int IntPID = strtol(CharPID, &EndChar, 10);
+    long IntPID = strtol(CharPID, &EndChar, 10);
     
-    if(IntPID < 0 || (*EndChar != (NULL || "\n"))){
+     if (EndChar == CharPID || IntPID <= 0 || 
+        (*EndChar != '\0' && *EndChar != '\n')) {
         return -1;
     }
-    else{
-        return IntPID;
-    }
+    
+    return (int)IntPID;
 }
