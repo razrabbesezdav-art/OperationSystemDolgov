@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char *read_cmdline(int pid) {
+static char *read_cmdline(int IntPID) {
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "/proc/%d/cmdline", pid);
+    snprintf(filepath, sizeof(filepath), "/proc/%d/cmdline", IntPID);
     
     FILE *fp = fopen(filepath, "rb");
     if (fp == NULL) {
@@ -35,6 +35,30 @@ static char *read_cmdline(int pid) {
     return strdup(buffer);
 }
 
+int count_fd(int IntPID) {
+    char command[256];
+    char line[256];
+    int fd_counter = 0;
+    
+    snprintf(command, sizeof(command), "ls -l /proc/%d/fd", IntPID);
+    
+    FILE *fp = popen(command, "r");
+    if (fp == NULL) {
+        return -1;
+    }
+    
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strstr(line, "lrwx") != NULL) {
+            fd_counter++;
+        }
+    }
+    
+    pclose(fp);
+    return fd_counter;
+}
+
+
+
 ProcessInfo proc_info_init(int IntPID) {
     ProcessInfo result = {};
     result.PID = IntPID;
@@ -52,7 +76,7 @@ ProcessInfo proc_info_init(int IntPID) {
     FILE *fp = popen(StateCommand, "r");
     if (fp == NULL) {
         perror("popen failed");
-        return result;
+        return;
     }
     
     while (fgets(Stateline, sizeof(Stateline), fp) != NULL) {
@@ -70,6 +94,7 @@ ProcessInfo proc_info_init(int IntPID) {
     pclose(fp);
     
     result.CommandLine = read_cmdline(IntPID);
+    result.FDcount = count_fd(IntPID);
     
     return result;
 }
