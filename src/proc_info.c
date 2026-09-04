@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "../include/proc_info.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,7 +61,7 @@ static int count_fd(int pid) {
 }
 
 ProcessInfo proc_info_init(void) {
-    ProcessInfo result = {};
+    ProcessInfo result = {0};
     result.PID = 0;
     result.ParentPID = -1;
     result.CommandLine = NULL;
