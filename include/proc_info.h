@@ -9,7 +9,10 @@ typedef struct{
     int FDcount;
 }ProcessInfo;
 
-ProcessInfo proc_info_init(int IntPID);
+ProcessInfo proc_info_init();
+ProcessInfo proc_info_fill(int IntPID, ProcessInfo result);
 void proc_info_destroy(ProcessInfo);
+static char *read_cmdline(int IntPID);
+int count_fd(int IntPID);
 
 #endif

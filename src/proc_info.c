@@ -57,17 +57,19 @@ int count_fd(int IntPID) {
     return fd_counter;
 }
 
-
-
-ProcessInfo proc_info_init(int IntPID) {
+ProcessInfo proc_info_init(){
     ProcessInfo result = {};
-    result.PID = IntPID;
+    result.PID = 0;
     result.ParentPID = -1;
     result.CommandLine = NULL;
     result.FDcount = 0;
     strcpy(result.Name, "Unknown");
     strcpy(result.State, "Unknown");
-    
+    return result;
+}
+
+ProcessInfo proc_info_fill(int IntPID, ProcessInfo result) {
+    result.PID = IntPID;
     char StateCommand[256];
     char Stateline[256];
     snprintf(StateCommand, sizeof(StateCommand), 
